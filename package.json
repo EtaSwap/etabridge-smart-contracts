@@ -1,0 +1,16 @@
+{
+  "name": "etabridge-contracts",
+  "author": "Danylo Moshenskyi",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "hardhat compile"
+  },
+  "dependencies": {
+    "@layerzerolabs/oapp-evm": "0.3.0",
+    "@openzeppelin/contracts": "5.1.0",
+    "@openzeppelin/contracts-upgradeable": "5.1.0"
+  },
+  "devDependencies": {
+    "hardhat": "^2.24.0"
+  }
+}
