@@ -10,7 +10,7 @@ import "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 contract EtaBridge is OApp, ReentrancyGuard {
     mapping(string => IERC20Metadata) public supportedTokens;
     uint16 public feeBasisPoints;
-    uint256 private scale = 1e18;
+    uint256 private immutable scale = 1e18;
 
     event TokensBridged(bytes32 indexed guid, address indexed sender, IERC20Metadata token, uint256 amount, address receiver, uint256 fee, uint32 targetChainId);
     event TokensReleased(bytes32 indexed guid, address indexed receiver, IERC20Metadata token, uint256 amount);
@@ -50,9 +50,7 @@ contract EtaBridge is OApp, ReentrancyGuard {
         IERC20Metadata token = supportedTokens[symbol];
         require(address(token) != address(0), "Token not supported");
 
-        uint256 normalizedAmount = (amount * scale) / (10 ** token.decimals());
-        uint256 fee = (normalizedAmount * feeBasisPoints) / 10000;
-        uint256 amountAfterFee = normalizedAmount - fee;
+        (uint256 amountAfterFee,) = _calculateAmountsToSend(token, amount);
 
         bytes memory payload = abi.encode(receiver, symbol, amountAfterFee);
 
@@ -71,16 +69,26 @@ contract EtaBridge is OApp, ReentrancyGuard {
         IERC20Metadata token = supportedTokens[symbol];
         require(address(token) != address(0), "Token not supported");
 
-        SafeERC20.safeTransferFrom(token, msg.sender, address(this), amount);
+        uint256 transferredAmount = 0;
+        {
+            uint256 balanceBefore = token.balanceOf(address(this));
+            SafeERC20.safeTransferFrom(token, msg.sender, address(this), amount);
+            uint256 balanceAfter = token.balanceOf(address(this));
+            transferredAmount = balanceAfter - balanceBefore;
+        }
 
-        uint256 normalizedAmount = (amount * scale) / (10 ** token.decimals());
-        uint256 fee = (normalizedAmount * feeBasisPoints) / 10000;
-        uint256 amountAfterFee = normalizedAmount - fee;
+        (uint256 amountAfterFee, uint256 fee) = _calculateAmountsToSend(token, transferredAmount);
 
         bytes memory payload = abi.encode(receiver, symbol, amountAfterFee);
 
         receipt = _lzSend(targetChainId, payload, _options, MessagingFee(msg.value, 0), payable(msg.sender));
         emit TokensBridged(receipt.guid, msg.sender, token, amountAfterFee, receiver, fee, targetChainId);
+    }
+
+    function _calculateAmountsToSend(IERC20Metadata token, uint256 amount) private view returns (uint256 amountAfterFee, uint256 fee) {
+        uint256 normalizedAmount = (amount * scale) / (10 ** token.decimals());
+        fee = (normalizedAmount * feeBasisPoints) / 10000;
+        amountAfterFee = normalizedAmount - fee;
     }
 
     function _lzReceive(
