@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
@@ -10,6 +12,7 @@ import "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 contract EtaBridge is Ownable, OApp, ReentrancyGuard {
     mapping(string => address) public supportedTokens;
     uint16 public feeBasisPoints;
+    uint256 private scale = 1e18;
 
     event TokensBridged(bytes32 indexed guid, address indexed sender, address token, uint256 amount, address receiver, uint256 fee, uint32 targetChainId);
     event TokensReleased(bytes32 indexed guid, address indexed receiver, address token, uint256 amount);
@@ -43,8 +46,12 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
         uint32 targetChainId,
         bytes calldata _options
     ) public view returns (uint256 nativeFee) {
-        uint256 fee = (amount * feeBasisPoints) / 10000;
-        uint256 amountAfterFee = amount - fee;
+        require(receiver != address(0), "Invalid receiver address");
+        require(supportedTokens[symbol] != address(0), "Token not supported");
+
+        uint256 normalizedAmount = (amount * scale) / (10 ** IERC20Metadata(supportedTokens[symbol]).decimals());
+        uint256 fee = (normalizedAmount * feeBasisPoints) / 10000;
+        uint256 amountAfterFee = normalizedAmount - fee;
 
         bytes memory payload = abi.encode(receiver, symbol, amountAfterFee);
 
@@ -63,8 +70,9 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
         require(supportedTokens[symbol] != address(0), "Token not supported");
         SafeERC20.safeTransferFrom(IERC20(supportedTokens[symbol]), msg.sender, address(this), amount);
 
-        uint256 fee = (amount * feeBasisPoints) / 10000;
-        uint256 amountAfterFee = amount - fee;
+        uint256 normalizedAmount = (amount * scale) / (10 ** IERC20Metadata(supportedTokens[symbol]).decimals());
+        uint256 fee = (normalizedAmount * feeBasisPoints) / 10000;
+        uint256 amountAfterFee = normalizedAmount - fee;
 
         bytes memory payload = abi.encode(receiver, symbol, amountAfterFee);
 
@@ -82,8 +90,9 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
         (address receiver, string memory symbol, uint256 amount) = abi.decode(payload, (address, string, uint256));
         require(supportedTokens[symbol] != address(0), "Token not supported");
 
-        emit TokensReleased(guid, receiver, supportedTokens[symbol], amount);
-        SafeERC20.safeTransfer(IERC20(supportedTokens[symbol]), receiver, amount);
+        uint256 normalizedAmount = (amount * (10 ** IERC20Metadata(supportedTokens[symbol]).decimals())) / scale;
+        emit TokensReleased(guid, receiver, supportedTokens[symbol], normalizedAmount);
+        SafeERC20.safeTransfer(IERC20(supportedTokens[symbol]), receiver, normalizedAmount);
     }
 
     // Recover ERC20 tokens sent to this contract
