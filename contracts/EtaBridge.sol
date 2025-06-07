@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
-contract EtaBridge is Ownable, OApp, ReentrancyGuard {
+contract EtaBridge is OApp, ReentrancyGuard {
     mapping(string => IERC20Metadata) public supportedTokens;
     uint16 public feeBasisPoints;
     uint256 private scale = 1e18;
