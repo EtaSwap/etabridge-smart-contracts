@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
@@ -60,7 +61,7 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
     ) external payable nonReentrant returns (MessagingReceipt memory receipt) {
         require(receiver != address(0), "Invalid receiver address");
         require(supportedTokens[symbol] != address(0), "Token not supported");
-        require(IERC20(supportedTokens[symbol]).transferFrom(msg.sender, address(this), amount), "Token transfer failed");
+        SafeERC20.safeTransferFrom(IERC20(supportedTokens[symbol]), msg.sender, address(this), amount);
 
         uint256 fee = (amount * feeBasisPoints) / 10000;
         uint256 amountAfterFee = amount - fee;
@@ -82,12 +83,12 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
         require(supportedTokens[symbol] != address(0), "Token not supported");
 
         emit TokensReleased(guid, receiver, supportedTokens[symbol], amount);
-        require(IERC20(supportedTokens[symbol]).transfer(receiver, amount), "Token transfer failed");
+        SafeERC20.safeTransfer(IERC20(supportedTokens[symbol]), receiver, amount);
     }
 
     // Recover ERC20 tokens sent to this contract
     function recoverERC20(address tokenAddress, uint256 amount) external onlyOwner {
-        IERC20(tokenAddress).transfer(owner(), amount);
+        SafeERC20.safeTransfer(IERC20(tokenAddress), owner(), amount);
     }
 
     // Recover native currency sent to this contract via specific functions

@@ -1,2 +1,5 @@
 cache
 artifacts
+
+.idea
+node_modules
