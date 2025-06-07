@@ -18,6 +18,7 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
     event TokensReleased(bytes32 indexed guid, address indexed receiver, address token, uint256 amount);
     event TokenAdded(string indexed symbol, address indexed tokenAddress);
     event TokenRemoved(string indexed symbol);
+    event FeeUpdated(uint16 indexed feeBasisPoints);
 
     constructor(address _owner, address _lzEndpoint, uint16 _feeBasisPoints) Ownable(_owner) OApp(_lzEndpoint, _owner) {
         feeBasisPoints = _feeBasisPoints;
@@ -37,6 +38,7 @@ contract EtaBridge is Ownable, OApp, ReentrancyGuard {
     function updateFee(uint16 _feeBasisPoints) external onlyOwner {
         require(_feeBasisPoints <= 100, "Fee cannot exceed 1%");
         feeBasisPoints = _feeBasisPoints;
+        emit FeeUpdated(feeBasisPoints);
     }
 
     function quote(
