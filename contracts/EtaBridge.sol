@@ -11,6 +11,7 @@ contract EtaBridge is OApp, ReentrancyGuard {
     mapping(string => IERC20Metadata) public supportedTokens;
     uint16 public feeBasisPoints;
     uint256 private immutable scale = 1e18;
+    uint16 private immutable maxFeeBasisPoints = 100; // 1%
 
     event TokensBridged(bytes32 indexed guid, address indexed sender, IERC20Metadata token, uint256 amount, address receiver, uint256 fee, uint32 targetChainId);
     event TokensReleased(bytes32 indexed guid, address indexed receiver, IERC20Metadata token, uint256 amount);
@@ -18,7 +19,12 @@ contract EtaBridge is OApp, ReentrancyGuard {
     event TokenRemoved(string indexed symbol);
     event FeeUpdated(uint16 indexed feeBasisPoints);
 
+    error TokenNotSupported(string symbol);
+    error FeeExceedMaximum(uint16 feeBasisPoints, uint16 maxFeeBasisPoints);
+    error InvalidReceiverAddress();
+
     constructor(address _owner, address _lzEndpoint, uint16 _feeBasisPoints) Ownable(_owner) OApp(_lzEndpoint, _owner) {
+        if (_feeBasisPoints > 100) revert FeeExceedMaximum(_feeBasisPoints, maxFeeBasisPoints);
         feeBasisPoints = _feeBasisPoints;
     }
 
@@ -28,13 +34,13 @@ contract EtaBridge is OApp, ReentrancyGuard {
     }
 
     function removeSupportedToken(string calldata _symbol) external onlyOwner {
-        require(address(supportedTokens[_symbol]) != address(0), "Token not supported");
+        if (address(supportedTokens[_symbol]) == address(0)) revert TokenNotSupported(_symbol);
         delete supportedTokens[_symbol];
         emit TokenRemoved(_symbol);
     }
 
     function updateFee(uint16 _feeBasisPoints) external onlyOwner {
-        require(_feeBasisPoints <= 100, "Fee cannot exceed 1%");
+        if (_feeBasisPoints > 100) revert FeeExceedMaximum(_feeBasisPoints, maxFeeBasisPoints);
         feeBasisPoints = _feeBasisPoints;
         emit FeeUpdated(_feeBasisPoints);
     }
@@ -46,9 +52,9 @@ contract EtaBridge is OApp, ReentrancyGuard {
         uint32 targetChainId,
         bytes calldata _options
     ) public view returns (uint256 nativeFee) {
-        require(receiver != address(0), "Invalid receiver address");
+        if (receiver == address(0)) revert InvalidReceiverAddress();
         IERC20Metadata token = supportedTokens[symbol];
-        require(address(token) != address(0), "Token not supported");
+        if (address(token) == address(0)) revert TokenNotSupported(symbol);
 
         (uint256 amountAfterFee,) = _calculateAmountsToSend(token, amount);
 
@@ -65,9 +71,9 @@ contract EtaBridge is OApp, ReentrancyGuard {
         uint32 targetChainId,
         bytes calldata _options
     ) external payable nonReentrant returns (MessagingReceipt memory receipt) {
-        require(receiver != address(0), "Invalid receiver address");
+        if (receiver == address(0)) revert InvalidReceiverAddress();
         IERC20Metadata token = supportedTokens[symbol];
-        require(address(token) != address(0), "Token not supported");
+        if (address(token) == address(0)) revert TokenNotSupported(symbol);
 
         uint256 transferredAmount = 0;
         {
@@ -101,7 +107,7 @@ contract EtaBridge is OApp, ReentrancyGuard {
         (address receiver, string memory symbol, uint256 amount) = abi.decode(payload, (address, string, uint256));
 
         IERC20Metadata token = supportedTokens[symbol];
-        require(address(token) != address(0), "Token not supported");
+        if (address(token) == address(0)) revert TokenNotSupported(symbol);
 
         uint256 normalizedAmount = (amount * (10 ** token.decimals())) / scale;
         emit TokensReleased(guid, receiver, token, normalizedAmount);
