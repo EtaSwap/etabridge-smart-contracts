@@ -1,2 +1,5 @@
 cache
-artifacts
+/artifacts
+
+.idea
+node_modules
